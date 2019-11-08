@@ -107,10 +107,10 @@ namespace Arcanum.Routes {
 						.Zip(rightNodes, (left, right) => (left, right))
 						.TakeWhile(pair => pair.left is RouteNode.Common && pair.right is RouteNode.Back)
 						.Count();
-				return
-					leftNodes.Take(leftNodes.Count - redundantNodeCount)
-						.Concat(rightNodes.Skip(redundantNodeCount))
-						.ToImmutableList();
+
+				var finalLeftNodes = leftNodes.GetRange(0, leftNodes.Count - redundantNodeCount);
+				var finalRightNodes = rightNodes.RemoveRange(0, redundantNodeCount);
+				return finalLeftNodes.AddRange(finalRightNodes);
 			}
 
 			return
