@@ -17,11 +17,12 @@ namespace Arcanum.Routes {
 		Route (ImmutableList<RouteNode> nodes) => this.nodes = nodes;
 
 		#region construction & deconstruction
-		public static Route empty { get; } = new Route(nodes: ImmutableList<RouteNode>.Empty);
+		public static Route root { get; } = new Route(nodes: ImmutableList<RouteNode>.Empty);
 
-		public Route (RouteNode routeNode): this(nodes: ImmutableList.Create(routeNode)) { }
+		public static Route Unit (RouteNode routeNode) =>
+			routeNode is RouteNode.Current ? root : new Route(ImmutableList.Create(routeNode));
 
-		public static implicit operator Route (RouteNode routeNode) => new Route(routeNode);
+		public static implicit operator Route (RouteNode routeNode) => Unit(routeNode);
 
 		public static Route Join (IEnumerable<RouteNode> routeNodes) {
 			var nodeList = ImmutableList.CreateBuilder<RouteNode>();
@@ -30,6 +31,7 @@ namespace Arcanum.Routes {
 					case RouteNode.Common commonNode:
 						nodeList.Add(commonNode);
 						break;
+					case RouteNode.Current _: break;
 					case RouteNode.Back _ when nodeList.LastOrDefault() is RouteNode.Common:
 						nodeList.RemoveLast();
 						break;
@@ -43,7 +45,7 @@ namespace Arcanum.Routes {
 			return new Route(nodes: nodeList.ToImmutable());
 		}
 
-		static Regex escapeRegex { get; } = new Regex(@"(\\|\.\.)");
+		static Regex escapeRegex { get; } = new Regex(@"(\\|^\.$|^\.\.$)");
 
 		static String EscapeNodeName (String nodeName) => escapeRegex.Replace(nodeName, @"\$1");
 
@@ -69,9 +71,11 @@ namespace Arcanum.Routes {
 					var slashPos = FindSlashPos(routeString, nodeStartPos);
 					var nodeString = routeString.Substring(nodeStartPos, slashPos - nodeStartPos);
 					yield return
-						nodeString is ".."
-							? (RouteNode) RouteNode.back
-							: new RouteNode.Common(name: UnescapeNodeName(nodeString));
+						nodeString switch {
+							"." => (RouteNode) RouteNode.current,
+							".." => RouteNode.back,
+							_ => new RouteNode.Common(name: UnescapeNodeName(nodeString))
+						};
 
 					nodeStartPos = slashPos + 1;
 				} while (nodeStartPos < routeString.Length);
@@ -92,6 +96,7 @@ namespace Arcanum.Routes {
 							RouteNode.Common commonNode => EscapeNodeName(commonNode.name),
 							RouteNode.Back _ => ".."
 						})
+				.DefaultIfEmpty(".")
 				.Join("/");
 
 		public Route Add (Route route) {
@@ -177,7 +182,7 @@ namespace Arcanum.Routes {
 		#endregion
 
 		#region tools
-		public Boolean isEmpty => nodes.IsEmpty;
+		public Boolean isRoot => nodes.IsEmpty;
 
 		public Boolean isLocal => nodes.IsEmpty || nodes[0] is RouteNode.Common;
 

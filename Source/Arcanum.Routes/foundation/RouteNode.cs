@@ -32,6 +32,10 @@ namespace Arcanum.Routes {
 			public override Int32 GetHashCode () => name.GetHashCode();
 		}
 
+		public sealed class Current: RouteNode { }
+
+		public static Current current { get; } = new Current();
+
 		public sealed class Back: RouteNode { }
 
 		public static Back back { get; } = new Back();
