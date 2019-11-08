@@ -84,17 +84,15 @@ namespace Arcanum.Routes {
 		public static implicit operator Route (String routeString) => Parse(routeString);
 
 		/// <inheritdoc />
-		public override String ToString () {
-			var nodeStrings =
-				nodes.Select(
+		public override String ToString () =>
+			nodes
+				.Select(
 					node =>
 						node switch {
 							RouteNode.Common commonNode => EscapeNodeName(commonNode.name),
 							RouteNode.Back _ => ".."
-						});
-			
-			return String.Join("/", nodeStrings);
-		}
+						})
+				.Join("/");
 
 		public Route Add (Route route) {
 			static ImmutableList<RouteNode> ConcatNodes (
