@@ -20,4 +20,8 @@
 	<ItemGroup>
 		<ProjectReference Include="../Arcanum.Routes/Arcanum.Routes.csproj"/>
 	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="resources/**"/>
+	</ItemGroup>
 </Project>
