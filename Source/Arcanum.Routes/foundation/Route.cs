@@ -45,6 +45,8 @@ namespace Arcanum.Routes {
 			return new Route(nodes: nodeList.ToImmutable());
 		}
 
+		public static Route Join (params RouteNode[] routeNodes) => Join((IEnumerable<RouteNode>) routeNodes);
+
 		static Regex escapeRegex { get; } = new Regex(@"(\\|^\.$|^\.\.$)");
 
 		static String EscapeNodeName (String nodeName) => escapeRegex.Replace(nodeName, @"\$1");
