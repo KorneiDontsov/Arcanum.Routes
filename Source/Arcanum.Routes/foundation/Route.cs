@@ -126,12 +126,37 @@ namespace Arcanum.Routes {
 		/// <inheritdoc />
 		public RouteNode this [Int32 index] => nodes[index];
 
+		public struct Enumerator: IEnumerator<RouteNode> {
+			ImmutableList<RouteNode>.Enumerator decorated;
+
+			/// <inheritdoc />
+			public RouteNode Current => decorated.Current;
+
+			/// <inheritdoc />
+			Object IEnumerator.Current => Current;
+
+			internal Enumerator (Route source) => decorated = source.nodes.GetEnumerator();
+
+			/// <inheritdoc />
+			public void Dispose () => decorated.Dispose();
+
+			/// <inheritdoc />
+			public Boolean MoveNext () => decorated.MoveNext();
+
+			/// <inheritdoc />
+			public void Reset () => decorated.Reset();
+		}
+
+		public Enumerator GetEnumerator () => new Enumerator(this);
+
 		/// <inheritdoc />
-		public IEnumerator<RouteNode> GetEnumerator () => nodes.GetEnumerator();
+		IEnumerator<RouteNode> IEnumerable<RouteNode>.GetEnumerator () => nodes.GetEnumerator();
 
 		/// <inheritdoc />
 		IEnumerator IEnumerable.GetEnumerator () => GetEnumerator();
+		#endregion
 
+		#region comparison
 		public static Boolean operator == (Route? first, Route? second) =>
 			first is { }
 				? second is { } && first.nodes.SequenceEqual(second.nodes)
