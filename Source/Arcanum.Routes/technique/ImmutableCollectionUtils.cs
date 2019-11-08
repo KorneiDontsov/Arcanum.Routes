@@ -11,7 +11,7 @@ namespace Arcanum.Routes {
 
 		public static ImmutableList<T> RemoveLast<T> (this ImmutableList<T> list) =>
 			list.RemoveAt(list.Count - 1);
-		
+
 		public static T LastOrDefault<T> (this ImmutableList<T>.Builder listBuilder) =>
 			listBuilder.Count > 0 ? listBuilder[listBuilder.Count - 1] : default;
 

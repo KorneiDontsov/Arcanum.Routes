@@ -8,26 +8,125 @@ namespace Arcanum.Routes {
 	using System.Collections.Generic;
 	using System.Collections.Immutable;
 	using System.Linq;
+	using System.Text.RegularExpressions;
 	using static Arcanum.Routes.ImmutableCollectionUtils;
 
 	public sealed class Route: IReadOnlyList<RouteNode>, IEquatable<Route> {
 		ImmutableList<RouteNode> nodes { get; }
 
-		public Boolean isEmpty => nodes.IsEmpty;
+		Route (ImmutableList<RouteNode> nodes) => this.nodes = nodes;
 
-		public Boolean isLocal => nodes.IsEmpty || nodes[0] is RouteNode.Common;
+		#region construction & deconstruction
+		public static Route empty { get; } = new Route(nodes: ImmutableList<RouteNode>.Empty);
 
+		public Route (RouteNode routeNode): this(nodes: ImmutableList.Create(routeNode)) { }
+
+		public static implicit operator Route (RouteNode routeNode) => new Route(routeNode);
+
+		public static Route Join (IEnumerable<RouteNode> routeNodes) {
+			var nodeList = ImmutableList.CreateBuilder<RouteNode>();
+			foreach (var node in routeNodes)
+				switch (node) {
+					case RouteNode.Common commonNode:
+						nodeList.Add(commonNode);
+						break;
+					case RouteNode.Back _ when nodeList.LastOrDefault() is RouteNode.Common:
+						nodeList.RemoveLast();
+						break;
+					case RouteNode.Back backNode:
+						nodeList.Add(backNode);
+						break;
+					case var unknownNode:
+						throw new Exception($"Route node {unknownNode.GetType()} is not expected.");
+				}
+
+			return new Route(nodes: nodeList.ToImmutable());
+		}
+
+		static Regex escapeRegex { get; } = new Regex(@"(\\|\.\.)");
+
+		static String EscapeNodeName (String nodeName) => escapeRegex.Replace(nodeName, @"\$1");
+
+		static Regex unescapeRegex { get; } = new Regex(@"\\(.)", RegexOptions.Singleline);
+
+		static String UnescapeNodeName (String escapedNodeName) => unescapeRegex.Replace(escapedNodeName, "$1");
+
+		public static Route Parse (String routeString) {
+			static IEnumerable<RouteNode> EnumerateNodes (String routeString) {
+				static Int32 FindSlashPos (String routeString, Int32 startPos) {
+					var searchPos = startPos;
+					while (routeString.IndexOf('/', searchPos) is var slashPos && slashPos != -1)
+						if (slashPos != 0 && routeString[slashPos - 1] == '\\')
+							searchPos = slashPos + 1;
+						else
+							return slashPos;
+
+					return routeString.Length;
+				}
+
+				var nodeStartPos = 0;
+				do {
+					var slashPos = FindSlashPos(routeString, nodeStartPos);
+					var nodeString = routeString.Substring(nodeStartPos, slashPos - nodeStartPos);
+					yield return
+						nodeString is ".."
+							? (RouteNode) RouteNode.back
+							: new RouteNode.Common(name: UnescapeNodeName(nodeString));
+
+					nodeStartPos = slashPos + 1;
+				} while (nodeStartPos < routeString.Length);
+			}
+
+			var nodes = EnumerateNodes(routeString);
+			return Join(nodes);
+		}
+
+		public static implicit operator Route (String routeString) => Parse(routeString);
+
+		/// <inheritdoc />
+		public override String ToString () {
+			var nodeStrings =
+				nodes.Select(
+					node =>
+						node switch {
+							RouteNode.Common commonNode => EscapeNodeName(commonNode.name),
+							RouteNode.Back _ => ".."
+						});
+			
+			return String.Join("/", nodeStrings);
+		}
+
+		public Route Add (Route route) {
+			static ImmutableList<RouteNode> ConcatNodes (
+			ImmutableList<RouteNode> leftNodes, ImmutableList<RouteNode> rightNodes) {
+				var redundantNodeCount =
+					leftNodes.Reverse()
+						.Zip(rightNodes, (left, right) => (left, right))
+						.TakeWhile(pair => pair.left is RouteNode.Common && pair.right is RouteNode.Back)
+						.Count();
+				return
+					leftNodes.Take(leftNodes.Count - redundantNodeCount)
+						.Concat(rightNodes.Skip(redundantNodeCount))
+						.ToImmutableList();
+			}
+
+			return
+				(this, route) switch {
+					(var first, { nodes: { IsEmpty: true } }) => first,
+					({ nodes: { IsEmpty: true } }, var second) => second,
+					var (first, second) => new Route(nodes: ConcatNodes(first.nodes, second.nodes))
+				};
+		}
+
+		public static Route operator + (Route left, Route right) => left.Add(right);
+		#endregion
+
+		#region enumeration
 		/// <inheritdoc />
 		public Int32 Count => nodes.Count;
 
 		/// <inheritdoc />
 		public RouteNode this [Int32 index] => nodes[index];
-
-		Route (ImmutableList<RouteNode> nodes) => this.nodes = nodes;
-
-		public Route (RouteNode routeNode): this(nodes: ImmutableList.Create(routeNode)) { }
-
-		public static implicit operator Route (RouteNode routeNode) => new Route(routeNode);
 
 		/// <inheritdoc />
 		public IEnumerator<RouteNode> GetEnumerator () => nodes.GetEnumerator();
@@ -52,64 +151,12 @@ namespace Arcanum.Routes {
 
 		/// <inheritdoc />
 		public override Boolean Equals (Object? obj) => obj is Route other && this == other;
+		#endregion
 
-		public static Route Parse (String routeString) {
-			var nodes =
-				routeString.Split('/')
-					.Aggregate(
-						seed: ImmutableList.CreateBuilder<RouteNode>(),
-						(nodeList, nodeString) => {
-							if (nodeString != "..")
-								nodeList.Add(new RouteNode.Common(nodeString));
-							else if (nodeList.LastOrDefault() is RouteNode.Common)
-								nodeList.RemoveLast();
-							else
-								nodeList.Add(RouteNode.back);
+		#region tools
+		public Boolean isEmpty => nodes.IsEmpty;
 
-							return nodeList;
-						})
-					.ToImmutable();
-
-			return new Route(nodes);
-		}
-
-		public static implicit operator Route (String routeString) => Parse(routeString);
-
-		/// <inheritdoc />
-		public override String ToString () {
-			var nodeStrings =
-				nodes.Select(
-					node =>
-						node switch {
-							RouteNode.Common commonNode => commonNode.name,
-							RouteNode.Back _ => ".."
-						});
-			return String.Join("/", nodeStrings);
-		}
-
-		public Route Add (Route route) {
-			static ImmutableList<RouteNode> ConcatNodes (
-			ImmutableList<RouteNode> leftNodes, ImmutableList<RouteNode> rightNodes) {
-				var redundantNodeCount =
-					leftNodes.Reverse()
-						.Zip(rightNodes, (left, right) => (left, right))
-						.TakeWhile(pair => pair.left is RouteNode.Common && pair.right is RouteNode.Back)
-						.Count();
-				return
-					leftNodes.Take(leftNodes.Count - redundantNodeCount)
-						.Concat(rightNodes.Skip(redundantNodeCount))
-						.ToImmutableList();
-			}
-
-			return
-				(this, route) switch {
-					(var first, { isEmpty: true }) => first,
-					({ isEmpty: true }, var second) => second,
-					var (first, second) => new Route(nodes: ConcatNodes(first.nodes, second.nodes))
-				};
-		}
-
-		public static Route operator + (Route left, Route right) => left.Add(right);
+		public Boolean isLocal => nodes.IsEmpty || nodes[0] is RouteNode.Common;
 
 		public Route CreateParent () =>
 			nodes.LastOrDefault() switch {
@@ -117,5 +164,6 @@ namespace Arcanum.Routes {
 				RouteNode.Common _ => new Route(nodes: nodes.RemoveLast()),
 				RouteNode.Back _ => new Route(nodes: nodes.Add(RouteNode.back))
 			};
+		#endregion
 	}
 }
