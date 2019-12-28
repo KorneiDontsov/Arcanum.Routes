@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>8.0</LangVersion>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <Product>Arcanum.Routes</Product>
+        <Title>Arcanum.Routes</Title>
+        <Description>
+            Arcanum.Routes implements very simple and and performant format of routes/paths that you can use in many cases to save your time.
+        </Description>
+        <Version>2.0.0</Version>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.Collections.Immutable" Version="1.7.0" />
+        <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.3" />
+    </ItemGroup>
+</Project>

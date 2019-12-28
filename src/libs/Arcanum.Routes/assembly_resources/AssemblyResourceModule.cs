@@ -7,9 +7,9 @@ namespace Arcanum.Routes {
 	using System.Reflection;
 	using System.Text;
 	using System.Threading.Tasks;
+	using static System.String;
 
-	public static class AssemblyResourceProvider {
-		/// <param name = "resourcePath"> Must be local. </param>
+	public static class AssemblyResourceModule {
 		/// <exception cref = "FileNotFoundException"> <paramref name = "resourcePath" /> was not found. </exception>
 		/// <exception cref = "FileLoadException"> A file that was found could not be loaded. </exception>
 		/// <exception cref = "BadImageFormatException"> <paramref name = "assembly" /> is not valid. </exception>
@@ -17,18 +17,12 @@ namespace Arcanum.Routes {
 		///     Resource length is greater than <see cref = "Int64.MaxValue" />.
 		/// </exception>
 		public static Stream OpenResourceStream (this Assembly assembly, Route resourcePath) {
-			if (! resourcePath.isLocal)
-				throw
-					new ArgumentException(
-						$"Failed to stream resource of assembly {assembly} because the specified resource path '{resourcePath}' is not local.");
-			else {
-				var resourceName =
-					resourcePath.Select(node => ((RouteNode.Common) node).name)
-						.Prepend(assembly.GetName().Name)
-						.Join(".");
-
-				return assembly.GetManifestResourceStream(resourceName);
-			}
+			var resourceNameBuilder = new StringBuilder(128).Append(assembly.GetName().Name);
+			foreach (var node in resourcePath.nodes) resourceNameBuilder.Append('.').Append(node);
+			var resourceName = resourceNameBuilder.ToString();
+			return
+				assembly.GetManifestResourceStream(resourceName)
+				?? throw new FileNotFoundException("Resource not found.", resourceName);
 		}
 
 		/// <inheritdoc cref = "OpenResourceStream" />
