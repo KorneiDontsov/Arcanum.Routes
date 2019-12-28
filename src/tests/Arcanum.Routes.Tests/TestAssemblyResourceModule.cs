@@ -2,12 +2,20 @@
 
 namespace Arcanum.Routes.Tests {
 	using FluentAssertions;
+	using System;
+	using System.IO;
 	using System.Reflection;
 	using System.Threading.Tasks;
 	using Xunit;
 
-	public class TestAssemblyResourceProvider {
+	public class TestAssemblyResourceModule {
 		Assembly assembly { get; } = Assembly.GetExecutingAssembly();
+
+		[Fact]
+		public void FileNotFoundExceptionIsThrownWhereNoResourceFound () {
+			Action action = () => assembly.OpenResourceStream("resources/nonexistent_resource.whatever");
+			action.Should().Throw<FileNotFoundException>();
+		}
 
 		[Fact]
 		public async Task ResourceTextIsRead () {
