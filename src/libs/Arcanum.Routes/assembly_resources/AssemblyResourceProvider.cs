@@ -7,6 +7,7 @@ namespace Arcanum.Routes {
 	using System.Reflection;
 	using System.Text;
 	using System.Threading.Tasks;
+	using static System.String;
 
 	public static class AssemblyResourceProvider {
 		/// <param name = "resourcePath"> Must be local. </param>
@@ -17,18 +18,8 @@ namespace Arcanum.Routes {
 		///     Resource length is greater than <see cref = "Int64.MaxValue" />.
 		/// </exception>
 		public static Stream OpenResourceStream (this Assembly assembly, Route resourcePath) {
-			if (! resourcePath.isLocal)
-				throw
-					new ArgumentException(
-						$"Failed to stream resource of assembly {assembly} because the specified resource path '{resourcePath}' is not local.");
-			else {
-				var resourceName =
-					resourcePath.Select(node => ((RouteNode.Common) node).name)
-						.Prepend(assembly.GetName().Name)
-						.Join(".");
-
-				return assembly.GetManifestResourceStream(resourceName);
-			}
+			var resourceName = Join(".", resourcePath.nodes.Prepend(assembly.GetName().Name));
+			return assembly.GetManifestResourceStream(resourceName);
 		}
 
 		/// <inheritdoc cref = "OpenResourceStream" />

@@ -4,196 +4,130 @@
 
 namespace Arcanum.Routes {
 	using System;
-	using System.Collections;
 	using System.Collections.Generic;
 	using System.Collections.Immutable;
-	using System.Linq;
-	using System.Text.RegularExpressions;
-	using static Arcanum.Routes.ImmutableCollectionUtils;
+	using System.Text;
+	using static System.String;
+	using static Arcanum.Routes.HashFunctions;
 
-	public sealed class Route: IReadOnlyList<RouteNode>, IEquatable<Route> {
-		ImmutableList<RouteNode> nodes { get; }
+	public readonly struct Route: IEquatable<Route> {
+		public ImmutableArray<String> nodes { get; }
 
-		Route (ImmutableList<RouteNode> nodes) => this.nodes = nodes;
+		Route (ImmutableArray<String> nodes) => this.nodes = nodes;
 
-		#region construction & deconstruction
-		public static Route root { get; } = new Route(nodes: ImmutableList<RouteNode>.Empty);
+		public Boolean isDefault => nodes.IsDefault;
 
-		public static Route Unit (RouteNode routeNode) =>
-			routeNode is RouteNode.Current ? root : new Route(ImmutableList.Create(routeNode));
+		public Boolean isEmpty => nodes.IsEmpty;
 
-		public static implicit operator Route (RouteNode routeNode) => Unit(routeNode);
+		public Boolean isDefaultOrEmpty => nodes.IsDefaultOrEmpty;
 
-		public static Route Join (IEnumerable<RouteNode> routeNodes) {
-			var nodeList = ImmutableList.CreateBuilder<RouteNode>();
-			foreach (var node in routeNodes)
-				switch (node) {
-					case RouteNode.Common commonNode:
-						nodeList.Add(commonNode);
-						break;
-					case RouteNode.Current _: break;
-					case RouteNode.Back _ when nodeList.LastOrDefault() is RouteNode.Common:
-						nodeList.RemoveLast();
-						break;
-					case RouteNode.Back backNode:
-						nodeList.Add(backNode);
-						break;
-					case var unknownNode:
-						throw new Exception($"Route node {unknownNode.GetType()} is not expected.");
-				}
+		public static Route empty { get; } = new Route(nodes: ImmutableArray<String>.Empty);
 
-			return new Route(nodes: nodeList.ToImmutable());
+		public static Route Unit (String node) {
+			if (IsNullOrEmpty(node))
+				return empty;
+			else if (node.IndexOf('/') is var slashPos && slashPos >= 0)
+				throw new Exception($"Node '{node}' contain '/' at {slashPos}.");
+			else
+				return new Route(ImmutableArray.Create(node));
 		}
 
-		public static Route Join (params RouteNode[] routeNodes) => Join((IEnumerable<RouteNode>) routeNodes);
+		public static Route Join (IEnumerable<String> nodes) {
+			var join = ImmutableArray.CreateBuilder<String>();
+			var nodeOrder = 0u;
+			foreach (var node in nodes) {
+				if (! IsNullOrEmpty(node)) {
+					if (node.IndexOf('/') is var slashPos && slashPos >= 0)
+						throw new Exception($"Node {nodeOrder} '{node}' contain '/' at {slashPos}.");
+					else
+						join.Add(node);
+				}
+				nodeOrder = checked(nodeOrder + 1);
+			}
+			return new Route(nodes: join.ToImmutable());
+		}
 
-		static Regex escapeRegex { get; } = new Regex(@"(\\|^\.$|^\.\.$)");
+		public static Route Join (params String[] nodes) => Join((IEnumerable<String>) nodes);
 
-		static String EscapeNodeName (String nodeName) => escapeRegex.Replace(nodeName, @"\$1");
+		public static Route Parse (String routeStr) {
+			var nodes = ImmutableArray.CreateBuilder<String>();
 
-		static Regex unescapeRegex { get; } = new Regex(@"\\(.)", RegexOptions.Singleline);
+			var nodeStrStartPos = 0;
+			while (nodeStrStartPos < routeStr.Length) {
+				var slashPos =
+					routeStr.IndexOf('/', nodeStrStartPos) is var maybeSlashPos && maybeSlashPos >= 0
+						? maybeSlashPos
+						: routeStr.Length;
+				var nodeStrLength = slashPos - nodeStrStartPos;
 
-		static String UnescapeNodeName (String escapedNodeName) => unescapeRegex.Replace(escapedNodeName, "$1");
-
-		public static Route Parse (String routeString) {
-			static IEnumerable<RouteNode> EnumerateNodes (String routeString) {
-				static Int32 FindSlashPos (String routeString, Int32 startPos) {
-					var searchPos = startPos;
-					while (routeString.IndexOf('/', searchPos) is var slashPos && slashPos != -1)
-						if (slashPos != 0 && routeString[slashPos - 1] == '\\')
-							searchPos = slashPos + 1;
-						else
-							return slashPos;
-
-					return routeString.Length;
+				if (nodeStrLength > 0) {
+					var node = routeStr.Substring(nodeStrStartPos, nodeStrLength);
+					nodes.Add(node);
 				}
 
-				var nodeStartPos = 0;
-				do {
-					var slashPos = FindSlashPos(routeString, nodeStartPos);
-					var nodeString = routeString.Substring(nodeStartPos, slashPos - nodeStartPos);
-					yield return
-						nodeString switch {
-							"." => (RouteNode) RouteNode.current,
-							".." => RouteNode.back,
-							_ => new RouteNode.Common(name: UnescapeNodeName(nodeString))
-						};
-
-					nodeStartPos = slashPos + 1;
-				} while (nodeStartPos < routeString.Length);
+				nodeStrStartPos = slashPos + 1;
 			}
 
-			var nodes = EnumerateNodes(routeString);
-			return Join(nodes);
+			return new Route(nodes.ToImmutable());
 		}
 
-		public static implicit operator Route (String routeString) => Parse(routeString);
+		public static implicit operator Route (String routeStr) => Parse(routeStr);
 
 		/// <inheritdoc />
-		public override String ToString () =>
-			nodes
-				.Select(
-					node =>
-						node switch {
-							RouteNode.Common commonNode => EscapeNodeName(commonNode.name),
-							RouteNode.Back _ => ".."
-						})
-				.DefaultIfEmpty(".")
-				.Join("/");
-
-		public Route Add (Route route) {
-			static ImmutableList<RouteNode> ConcatNodes (
-			ImmutableList<RouteNode> leftNodes, ImmutableList<RouteNode> rightNodes) {
-				var redundantNodeCount =
-					leftNodes.Reverse()
-						.Zip(rightNodes, (left, right) => (left, right))
-						.TakeWhile(pair => pair.left is RouteNode.Common && pair.right is RouteNode.Back)
-						.Count();
-
-				var finalLeftNodes = leftNodes.GetRange(0, leftNodes.Count - redundantNodeCount);
-				var finalRightNodes = rightNodes.RemoveRange(0, redundantNodeCount);
-				return finalLeftNodes.AddRange(finalRightNodes);
+		public override String ToString () {
+			if (nodes.IsDefaultOrEmpty) return "";
+			else {
+				var str = new StringBuilder(128);
+				foreach (var node in nodes) str.Append(node).Append('/');
+				return str.RemoveLast().ToString();
 			}
-
-			return
-				(this, route) switch {
-					(var first, { nodes: { IsEmpty: true } }) => first,
-					({ nodes: { IsEmpty: true } }, var second) => second,
-					var (first, second) => new Route(nodes: ConcatNodes(first.nodes, second.nodes))
-				};
 		}
+
+		public Route Add (Route route) => new Route(nodes: nodes.AddRange(route.nodes));
 
 		public static Route operator + (Route left, Route right) => left.Add(right);
-		#endregion
 
-		#region enumeration
-		/// <inheritdoc />
-		public Int32 Count => nodes.Count;
-
-		/// <inheritdoc />
-		public RouteNode this [Int32 index] => nodes[index];
-
-		public struct Enumerator: IEnumerator<RouteNode> {
-			ImmutableList<RouteNode>.Enumerator decorated;
-
-			/// <inheritdoc />
-			public RouteNode Current => decorated.Current;
-
-			/// <inheritdoc />
-			Object IEnumerator.Current => Current;
-
-			internal Enumerator (Route source) => decorated = source.nodes.GetEnumerator();
-
-			/// <inheritdoc />
-			public void Dispose () => decorated.Dispose();
-
-			/// <inheritdoc />
-			public Boolean MoveNext () => decorated.MoveNext();
-
-			/// <inheritdoc />
-			public void Reset () => decorated.Reset();
+		public Route Add (String node) {
+			if (IsNullOrEmpty(node))
+				return this;
+			else if (node.IndexOf('/') is var slashPos && slashPos >= 0)
+				throw new Exception($"Node '{node}' contain '/' at {slashPos}.");
+			else
+				return new Route(nodes: nodes.Add(node));
 		}
 
-		public Enumerator GetEnumerator () => new Enumerator(this);
+		public static Boolean operator == (Route first, Route second) {
+			if (first.nodes.Length != second.nodes.Length)
+				return false;
+			else {
+				var firstEnum = first.nodes.GetEnumerator();
+				var secondEnum = second.nodes.GetEnumerator();
+				while (firstEnum.MoveNext()) {
+					secondEnum.MoveNext();
+					if (firstEnum.Current != secondEnum.Current) return false;
+				}
+
+				return true;
+			}
+		}
+
+		public static Boolean operator != (Route first, Route second) => ! (first == second);
 
 		/// <inheritdoc />
-		IEnumerator<RouteNode> IEnumerable<RouteNode>.GetEnumerator () => nodes.GetEnumerator();
+		public Boolean Equals (Route other) => this == other;
 
 		/// <inheritdoc />
-		IEnumerator IEnumerable.GetEnumerator () => GetEnumerator();
-		#endregion
-
-		#region comparison
-		public static Boolean operator == (Route? first, Route? second) =>
-			first is { }
-				? second is { } && first.nodes.SequenceEqual(second.nodes)
-				: second is null;
-
-		public static Boolean operator != (Route? first, Route? second) =>
-			! (first == second);
+		public override Int32 GetHashCode () {
+			if (nodes.IsDefault) return 0;
+			else {
+				var hash = 0;
+				foreach (var node in nodes) hash = CombineHashes(hash, node.GetHashCode());
+				return hash;
+			}
+		}
 
 		/// <inheritdoc />
-		public Boolean Equals (Route? other) => this == other;
-
-		/// <inheritdoc />
-		public override Int32 GetHashCode () =>
-			nodes.Aggregate(seed: 0, (hash, node) => HashUtils.Combine(hash, node.GetHashCode()));
-
-		/// <inheritdoc />
-		public override Boolean Equals (Object? obj) => obj is Route other && this == other;
-		#endregion
-
-		#region tools
-		public Boolean isRoot => nodes.IsEmpty;
-
-		public Boolean isLocal => nodes.IsEmpty || nodes[0] is RouteNode.Common;
-
-		public Route CreateParent () =>
-			nodes.LastOrDefault() switch {
-				null => RouteNode.back,
-				RouteNode.Common _ => new Route(nodes: nodes.RemoveLast()),
-				RouteNode.Back _ => new Route(nodes: nodes.Add(RouteNode.back))
-			};
-		#endregion
+		public override Boolean Equals (Object? obj) =>
+			! nodes.IsDefault && obj is Route other && ! other.nodes.IsDefault && this == other;
 	}
 }

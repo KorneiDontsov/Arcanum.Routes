@@ -8,172 +8,152 @@ namespace Arcanum.Routes.Tests {
 
 	public class TestRoute {
 		[Fact]
-		public void RootRouteIsCreated () {
-			var route = Route.root;
+		public void DefaultValueIsNotValid () {
+			Route route = default;
+			route.isDefault.Should().BeTrue();
+		}
 
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) ".");
-				route.Should().BeEmpty();
-				route.Count.Should().Be(0);
-				route.isRoot.Should().BeTrue();
-				route.isLocal.Should().BeTrue();
-			}
+		[Fact]
+		public void EmptyRouteIsCreated () {
+			var route = Route.empty;
+
+			using var assertionScope = new AssertionScope();
+			route.Should().Be((Route) "");
+			route.isDefault.Should().BeFalse();
+			route.isEmpty.Should().BeTrue();
+			route.nodes.Should().BeEmpty();
 		}
 
 		[Fact]
 		public void UnitRouteIsCreatedFromCommonNode () {
-			var routeNode = new RouteNode.Common("single_common_node");
+			var route = Route.Unit("the node");
 
-			Route route = routeNode;
-
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) "single_common_node");
-				route.Should().Equal(routeNode);
-				route.Count.Should().Be(1);
-				route.isRoot.Should().BeFalse();
-				route.isLocal.Should().BeTrue();
-			}
+			using var assertionScope = new AssertionScope();
+			route.Should().Be((Route) "the node");
+			route.isDefault.Should().BeFalse();
+			route.isEmpty.Should().BeFalse();
+			route.nodes.Should().Equal("the node");
 		}
 
 		[Fact]
-		public void UnitRouteIsCreateFromBackNode () {
-			var routeNode = RouteNode.back;
+		public void UnitRouteIsCreatedFromEmptyNode () {
+			var route = Route.Unit("");
 
-			Route route = routeNode;
-
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) "..");
-				route.Should().Equal(routeNode);
-				route.Count.Should().Be(1);
-				route.isRoot.Should().BeFalse();
-				route.isLocal.Should().BeFalse();
-			}
+			using var assertionScope = new AssertionScope();
+			route.Should().Be((Route) "");
+			route.isDefault.Should().BeFalse();
+			route.isEmpty.Should().BeTrue();
+			route.nodes.Should().BeEmpty();
 		}
 
 		[Fact]
-		public void UnitRouteIsCreatedFromCurrentNode () {
-			var routeNode = RouteNode.current;
-
-			Route route = routeNode;
-
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) ".");
-				route.Should().BeEmpty();
-				route.Count.Should().Be(0);
-				route.isRoot.Should().BeTrue();
-				route.isLocal.Should().BeTrue();
-			}
+		public void UnitRouteIsNotCreatedFromNodeContainedSlash () {
+			Action action = () => Route.Unit("node/with/slashes");
+			action.Should().ThrowExactly<Exception>();
 		}
 
 		[Fact]
-		public void LocalRouteIsJoined () {
-			var route =
-				Route.Join(
-					new RouteNode.Common("first"),
-					RouteNode.current,
-					new RouteNode.Common("first_missed"),
-					RouteNode.back,
-					new RouteNode.Common("second"));
+		public void RouteIsJoined () {
+			var route = Route.Join("first", "", "second", "third");
 
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) "first/second");
-				route.Should().Equal(new RouteNode.Common("first"), new RouteNode.Common("second"));
-				route.Count.Should().Be(2);
-				route.isRoot.Should().BeFalse();
-				route.isLocal.Should().BeTrue();
-			}
+			using var assertionScope = new AssertionScope();
+			route.Should().Be((Route) "first/second/third");
+			route.isDefault.Should().BeFalse();
+			route.isEmpty.Should().BeFalse();
+			route.nodes.Should().Equal("first", "second", "third");
 		}
 
 		[Fact]
-		public void OuterRouteIsJoined () {
-			var route =
-				Route.Join(
-					RouteNode.back,
-					RouteNode.current,
-					new RouteNode.Common("neighborhood"));
-
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) "../neighborhood");
-				route.Should().Equal(RouteNode.back, new RouteNode.Common("neighborhood"));
-				route.Count.Should().Be(2);
-				route.isRoot.Should().BeFalse();
-				route.isLocal.Should().BeFalse();
-			}
+		public void RouteIsNotJoinedBecauseOfNodeContainedSlash () {
+			Action action = () => Route.Join("first", "second/but third", "fourth");
+			action.Should().ThrowExactly<Exception>();
 		}
 
 		[Fact]
-		public void RootRouteIsJoined () {
-			var route =
-				Route.Join(
-					RouteNode.current,
-					new RouteNode.Common("forget"),
-					RouteNode.back,
-					RouteNode.current);
+		public void EmptyRouteIsJoined () {
+			var route = Route.Join("", "", "");
 
-			using (new AssertionScope()) {
-				route.As<Object>().Should().Be(route).And.Be((Route) ".");
-				route.Should().BeEmpty();
-				route.Count.Should().Be(0);
-				route.isRoot.Should().BeTrue();
-				route.isLocal.Should().BeTrue();
-			}
+			using var assertionScope = new AssertionScope();
+			route.Should().Be((Route) "");
+			route.isDefault.Should().BeFalse();
+			route.isEmpty.Should().BeTrue();
+			route.nodes.Should().BeEmpty();
 		}
 
 		[Fact]
-		public void RoutesConcatenatedWithoutCompression () {
+		public void RoutesAreConcatenated () {
 			Route leftPart = "first/second";
 			Route rightPart = "third/fourth";
 
 			var route = leftPart + rightPart;
 
-			route.As<Object>().Should().Be((Route) "first/second/third/fourth");
+			route.Should().Be((Route) "first/second/third/fourth");
 		}
 
 		[Fact]
-		public void RoutesConcatenatedWithCompression () {
-			Route leftPart = "first/doesn't matter";
-			Route rightPart = "../second";
+		public void EmptyRoutesAreConcatenated () {
+			Route leftPart = "";
+			Route rightPart = "";
 
 			var route = leftPart + rightPart;
 
-			route.As<Object>().Should().Be((Route) "first/second");
+			route.Should().Be((Route) "");
 		}
 
-		[Fact]
-		public void RoutesConcatenatedToRoot () {
-			Route leftPart = "first/second";
-			Route rightPart = "../..";
-
-			var route = leftPart + rightPart;
-
-			route.As<Object>().Should().Be((Route) ".");
-		}
-
-		[Fact]
-		public void RouteStringIsParsed () {
-			var routeString = "./../first/doesn't matter/../second/any stuff/../.";
-
-			Route route = routeString;
-
-			route.As<Object>().Should().Be((Route) "../first/second");
+		[Theory]
+		[InlineData("", new String[0])]
+		[InlineData("/", new String[0])]
+		[InlineData("//", new String[0])]
+		[InlineData("///", new String[0])]
+		[InlineData("first", new[] { "first" })]
+		[InlineData("/first", new[] { "first" })]
+		[InlineData("first/", new[] { "first" })]
+		[InlineData("/first/", new[] { "first" })]
+		[InlineData("//first//", new[] { "first" })]
+		[InlineData("first/second", new[] { "first", "second" })]
+		[InlineData("/first/second", new[] { "first", "second" })]
+		[InlineData("first/second/", new[] { "first", "second" })]
+		[InlineData("/first/second/", new[] { "first", "second" })]
+		[InlineData("first//second", new[] { "first", "second" })]
+		[InlineData("first/second/third", new[] { "first", "second", "third" })]
+		[InlineData("first/second/third/fourth", new[] { "first", "second", "third", "fourth" })]
+		public void RouteStringIsParsed (String routeStr, String[] expectedNodes) {
+			Route route = routeStr;
+			route.nodes.Should().Equal(expectedNodes);
 		}
 
 		[Fact]
 		public void RouteConvertedToString () {
-			Route route = "../first/second";
-
-			var routeString = route.ToString();
-
-			routeString.Should().Be("../first/second");
+			Route route = "first/second";
+			var routeStr = route.ToString();
+			routeStr.Should().Be("first/second");
 		}
 
 		[Fact]
-		public void RootRouteConvertedToString () {
-			Route route = ".";
-
-			var routeString = route.ToString();
-
-			routeString.Should().Be(".");
+		public void EmptyRouteConvertedToString () {
+			Route route = "";
+			var routeStr = route.ToString();
+			routeStr.Should().Be("");
 		}
+
+		[Theory]
+		[InlineData("", "")]
+		[InlineData("/", "")]
+		[InlineData("//", "")]
+		[InlineData("///", "")]
+		[InlineData("first", "first")]
+		[InlineData("/first", "first")]
+		[InlineData("first/", "first")]
+		[InlineData("/first/", "first")]
+		[InlineData("//first//", "first")]
+		[InlineData("first/second", "first/second")]
+		[InlineData("/first/second", "first/second")]
+		[InlineData("first/second/", "first/second")]
+		[InlineData("/first/second/", "first/second")]
+		[InlineData("first//second", "first/second")]
+		[InlineData("first/second/third", "first/second/third")]
+		[InlineData("first/second/third/fourth", "first/second/third/fourth")]
+		public void RoutesAreEqual (Route first, Route second) =>
+			first.Should().Be(second);
 	}
 }
