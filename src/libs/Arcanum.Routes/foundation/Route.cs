@@ -23,22 +23,24 @@ namespace Arcanum.Routes {
 
 		public static Route empty { get; } = new Route(nodes: ImmutableArray<String>.Empty);
 
+		/// <exception cref = "FormatException"> <paramref name = "node" /> contains '/'. </exception>
 		public static Route Unit (String node) {
 			if (IsNullOrEmpty(node))
 				return empty;
 			else if (node.IndexOf('/') is var slashPos && slashPos >= 0)
-				throw new Exception($"Node '{node}' contain '/' at {slashPos}.");
+				throw new FormatException($"Node '{node}' contain '/' at {slashPos}.");
 			else
 				return new Route(ImmutableArray.Create(node));
 		}
 
+		/// <exception cref = "FormatException"> One of <paramref name = "nodes" /> contains '/'. </exception>
 		public static Route Join (IEnumerable<String> nodes) {
 			var join = ImmutableArray.CreateBuilder<String>();
 			var nodeOrder = 0u;
 			foreach (var node in nodes) {
 				if (! IsNullOrEmpty(node)) {
 					if (node.IndexOf('/') is var slashPos && slashPos >= 0)
-						throw new Exception($"Node {nodeOrder} '{node}' contain '/' at {slashPos}.");
+						throw new FormatException($"Node {nodeOrder} '{node}' contains '/' at {slashPos}.");
 					else
 						join.Add(node);
 				}
@@ -47,6 +49,7 @@ namespace Arcanum.Routes {
 			return new Route(nodes: join.ToImmutable());
 		}
 
+		/// <exception cref = "FormatException"> One of <paramref name = "nodes" /> contains '/'. </exception>
 		public static Route Join (params String[] nodes) => Join((IEnumerable<String>) nodes);
 
 		public static Route Parse (String routeStr) {
@@ -87,11 +90,12 @@ namespace Arcanum.Routes {
 
 		public static Route operator + (Route left, Route right) => left.Add(right);
 
+		/// <exception cref = "FormatException"> <paramref name = "node" /> contains '/'. </exception>
 		public Route Add (String node) {
 			if (IsNullOrEmpty(node))
 				return this;
 			else if (node.IndexOf('/') is var slashPos && slashPos >= 0)
-				throw new Exception($"Node '{node}' contain '/' at {slashPos}.");
+				throw new FormatException($"Node '{node}' contain '/' at {slashPos}.");
 			else
 				return new Route(nodes: nodes.Add(node));
 		}
