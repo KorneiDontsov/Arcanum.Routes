@@ -49,7 +49,7 @@ namespace Arcanum.Routes.Tests {
 		[Fact]
 		public void UnitRouteIsNotCreatedFromNodeContainedSlash () {
 			Action action = () => Route.Unit("node/with/slashes");
-			action.Should().ThrowExactly<Exception>();
+			action.Should().Throw<FormatException>();
 		}
 
 		[Fact]
@@ -66,7 +66,7 @@ namespace Arcanum.Routes.Tests {
 		[Fact]
 		public void RouteIsNotJoinedBecauseOfNodeContainedSlash () {
 			Action action = () => Route.Join("first", "second/but third", "fourth");
-			action.Should().ThrowExactly<Exception>();
+			action.Should().Throw<FormatException>();
 		}
 
 		[Fact]
