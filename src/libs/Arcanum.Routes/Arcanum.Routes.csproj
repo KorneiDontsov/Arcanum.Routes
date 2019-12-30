@@ -11,7 +11,7 @@
         <Description>
             Arcanum.Routes implements very simple and and performant format of routes/paths that you can use in many cases to save your time.
         </Description>
-        <Version>2.0.0</Version>
+        <Version>2.1.0</Version>
     </PropertyGroup>
 
     <ItemGroup>
